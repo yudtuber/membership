@@ -1,10 +1,10 @@
 export const firebaseConfig = {
-  apiKey: "AIzaSyCdaVyfERO3QRqFSUpI3YMuUJT0erlFa20E",
+  apiKey: "AIzaSyCdaVyfERO3QRqFSUpI3YMuUJT0erlFa20",
   authDomain: "membership-78d72.firebaseapp.com",
   projectId: "membership-78d72",
   storageBucket: "membership-78d72.firebasestorage.app",
   messagingSenderId: "190965757363",
-  appId: "1:190965757363",
+  appId: "1:190965757363:web:ca578a7840e505c30ac7c6",
   measurementId: "G-0Y2KSVNG11"
 };
 
