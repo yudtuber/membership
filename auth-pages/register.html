@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Register - MembershipPro</title>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+  <script type="module" src="../assets/js/app.js"></script>
+  <script type="module" src="../assets/js/auth.js"></script>
+</head>
+<body data-base="../">
+  <header class="topbar" data-topbar></header>
+  <main class="auth-wrap">
+    <article class="card"><div class="card-body"><h1>Register</h1><p>Buat akun member baru.</p><form class="form" data-auth-form="register"><div class="form-row"><label>Nama</label><input name="name" required></div><div class="form-row"><label>Email</label><input type="email" name="email" required></div><div class="form-row"><label>Password</label><input type="password" name="password" minlength="6" required></div><div class="form-row"><label>Kode Affiliate</label><input name="affiliateCode" placeholder="Opsional"></div><button class="btn primary" type="submit">Daftar</button><div data-form-status></div></form><p>Sudah punya akun? <a href="login.html">Login</a></p></div></article>
+  </main>
+</body>
+</html>

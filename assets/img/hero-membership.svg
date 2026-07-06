@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-label="Membership dashboard workspace">
+  <defs>
+    <linearGradient id="g1" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#0f766e"/>
+      <stop offset="0.48" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+    <filter id="s" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#07111f" flood-opacity=".25"/>
+    </filter>
+  </defs>
+  <rect width="1600" height="900" fill="#0b1220"/>
+  <rect x="0" y="0" width="1600" height="900" fill="url(#g1)" opacity=".65"/>
+  <circle cx="1330" cy="160" r="170" fill="#ffffff" opacity=".12"/>
+  <circle cx="250" cy="720" r="210" fill="#ffffff" opacity=".1"/>
+  <g filter="url(#s)">
+    <rect x="300" y="185" width="1000" height="560" rx="24" fill="#f8fafc"/>
+    <rect x="300" y="185" width="1000" height="78" rx="24" fill="#101828"/>
+    <circle cx="350" cy="224" r="10" fill="#ef4444"/>
+    <circle cx="382" cy="224" r="10" fill="#f59e0b"/>
+    <circle cx="414" cy="224" r="10" fill="#22c55e"/>
+    <rect x="350" y="312" width="230" height="100" rx="14" fill="#e0f2fe"/>
+    <rect x="610" y="312" width="230" height="100" rx="14" fill="#dcfce7"/>
+    <rect x="870" y="312" width="230" height="100" rx="14" fill="#fef3c7"/>
+    <rect x="350" y="465" width="420" height="190" rx="16" fill="#ffffff" stroke="#d8e1ee"/>
+    <rect x="815" y="465" width="285" height="190" rx="16" fill="#ffffff" stroke="#d8e1ee"/>
+    <path d="M386 608 C450 520 510 590 570 530 C620 480 668 522 730 498" fill="none" stroke="#2563eb" stroke-width="12" stroke-linecap="round"/>
+    <rect x="855" y="505" width="205" height="18" rx="9" fill="#cbd5e1"/>
+    <rect x="855" y="545" width="165" height="18" rx="9" fill="#99f6e4"/>
+    <rect x="855" y="585" width="120" height="18" rx="9" fill="#fde68a"/>
+  </g>
+</svg>

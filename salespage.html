@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sales Page - MembershipPro</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+  <script type="module" src="assets/js/app.js"></script>
+  <script type="module" src="assets/js/forms.js"></script>
+</head>
+<body>
+  <header class="topbar" data-topbar></header>
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <p class="eyebrow">Sales page</p>
+        <h1>Jual akses membership, produk digital, dan komunitas dari satu website.</h1>
+        <p>Landing page ini sudah membawa tracking affiliate melalui parameter `?ref=KODE` dan menyimpan lead ke Firestore.</p>
+      </div>
+      <a class="btn primary" href="pricing.html" data-track-click="sales_pricing"><i data-lucide="arrow-right"></i>Pilih Paket</a>
+    </div>
+    <section class="grid two">
+      <article class="card"><div class="card-body"><h2>Benefit utama</h2><ul class="list"><li><i data-lucide="check"></i>Login member dengan Firebase Auth</li><li><i data-lucide="check"></i>Order dan invoice di Firestore</li><li><i data-lucide="check"></i>Download file via Storage</li><li><i data-lucide="check"></i>Tracking affiliate view/click/sale</li></ul></div></article>
+      <article class="card"><div class="card-body"><h2>Ambil lead</h2><form class="form" data-public-form="lead"><div class="form-row"><label>Nama</label><input name="name" required></div><div class="form-row"><label>Email</label><input type="email" name="email" required></div><div class="form-row"><label>Minat</label><select name="interest"><option>Starter</option><option>Premium</option><option>Enterprise</option></select></div><button class="btn primary" type="submit">Kirim Lead</button><div data-form-status></div></form></div></article>
+    </section>
+  </main>
+  <footer class="footer" data-footer></footer>
+</body>
+</html>
