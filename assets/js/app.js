@@ -114,6 +114,7 @@ function requireAuth() {
     }
     await renderStats(profile);
     await renderTable(profile);
+    await renderProductGallery(profile);
     hydrateIcons();
   });
 }
@@ -170,6 +171,14 @@ function selectHtml(field, value, options) {
 
 function actionButton(action, collectionName, id, label) {
   return `<button class="btn" type="button" data-admin-action="${escapeHtml(action)}" data-collection="${escapeHtml(collectionName)}" data-id="${escapeHtml(id)}">${escapeHtml(label)}</button>`;
+}
+
+function slugify(value) {
+  return String(value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function renderMetricCards(target, values) {
@@ -341,14 +350,31 @@ async function renderAdminTable(table, type) {
 
     if (tableType === "affiliates") {
       const applications = await dataApi.latest("affiliateApplications", 50);
-      table.innerHTML = tableHtml(["Nama", "Email", "Channel", "Tanggal", "Status", "Aksi"], applications.map((item) => [
-        `${escapeHtml(item.name || "-")}<input type="hidden" data-field="name" value="${escapeHtml(item.name || "")}">`,
-        `${escapeHtml(item.email || "-")}<input type="hidden" data-field="email" value="${escapeHtml(item.email || "")}">`,
-        escapeHtml(item.channel || "-"),
-        formatDate(item.createdAt),
-        selectHtml("status", item.status, ["review", "approved", "rejected", "blocked"]),
-        `${actionButton("update-row", "affiliateApplications", item.id, "Simpan")} ${actionButton("approve-affiliate", "affiliateApplications", item.id, "Approve")}`
-      ]));
+      const rows = await Promise.all(applications.map(async (item) => {
+        const affiliateCode = item.affiliateCode || item.code || slugify(item.name || item.email || item.id);
+        const [views, clicks, leads, sales, payouts] = await Promise.all([
+          dataApi.byField("views", "affiliateCode", affiliateCode, 100),
+          dataApi.byField("clicks", "affiliateCode", affiliateCode, 100),
+          dataApi.byField("leads", "affiliateCode", affiliateCode, 100),
+          dataApi.byField("sales", "affiliateCode", affiliateCode, 100),
+          dataApi.byField("payouts", "affiliateCode", affiliateCode, 100)
+        ]);
+        const salesTotal = sales.reduce((total, sale) => total + Number(sale.amount || 0), 0);
+        const paidTotal = payouts
+          .filter((payout) => String(payout.status || "").toLowerCase() === "paid")
+          .reduce((total, payout) => total + Number(payout.amount || 0), 0);
+        const commissionDue = Math.max(0, Math.round(salesTotal * 0.3) - paidTotal);
+        return [
+          `${escapeHtml(item.name || "-")}<input type="hidden" data-field="name" value="${escapeHtml(item.name || "")}">`,
+          `${escapeHtml(item.email || "-")}<input type="hidden" data-field="email" value="${escapeHtml(item.email || "")}">`,
+          `<input data-field="affiliateCode" value="${escapeHtml(affiliateCode)}">`,
+          `${formatNumber(views.length)} / ${formatNumber(clicks.length)} / ${formatNumber(leads.length)} / ${formatNumber(sales.length)}`,
+          `${formatCurrency(commissionDue)}<input data-field="payoutAmount" type="number" value="${commissionDue}">`,
+          selectHtml("status", item.status, ["review", "approved", "rejected", "blocked"]),
+          `${actionButton("update-row", "affiliateApplications", item.id, "Simpan")} ${actionButton("approve-affiliate", "affiliateApplications", item.id, "Approve")} ${actionButton("create-payout", "affiliateApplications", item.id, "Buat Payout")}`
+        ];
+      }));
+      table.innerHTML = tableHtml(["Nama", "Email", "Kode", "Views/Clicks/Leads/Sales", "Komisi/Payout", "Status", "Aksi"], rows);
       return;
     }
   } catch (error) {
@@ -498,7 +524,7 @@ function bindAdminActions() {
         payload.status = "approved";
       }
       if (action === "reply-ticket") {
-        payload.status = payload.status || "answered";
+        payload.status = "answered";
         payload.repliedAt = new Date().toISOString();
         await dataApi.track("supportReplies", {
           ticketId: id,
@@ -536,6 +562,18 @@ function bindAdminActions() {
           });
         }
       }
+      if (action === "create-payout") {
+        const amount = Number(payload.payoutAmount || 0);
+        if (!amount) throw new Error("Nominal payout harus lebih dari 0.");
+        await dataApi.createPayout({
+          affiliateApplicationId: id,
+          affiliateCode: payload.affiliateCode,
+          email: payload.email,
+          name: payload.name,
+          amount,
+          status: "pending"
+        });
+      }
       showActionStatus("Data berhasil diperbarui.");
       await renderTable();
       await renderStats();
@@ -543,6 +581,39 @@ function bindAdminActions() {
       showActionStatus(error.message, "error");
     }
   });
+}
+
+async function renderProductGallery() {
+  const target = document.querySelector("[data-product-gallery]");
+  if (!target) return;
+  target.innerHTML = `<div class="notice">Memuat produk...</div>`;
+  try {
+    const products = await dataApi.latest("products", 50);
+    const activeProducts = products.filter((product) => product.status !== "archived");
+    if (!activeProducts.length) {
+      target.innerHTML = `<div class="notice">Belum ada produk aktif. Tambahkan produk dari Admin > Products.</div>`;
+      return;
+    }
+    target.innerHTML = activeProducts.map((product) => {
+      const checkout = `${base}direct-link-forms/checkout.html?plan=${encodeURIComponent(product.plan || product.slug || product.id)}&amount=${encodeURIComponent(product.price || 0)}`;
+      return `
+        <article class="card">
+          <div class="card-body">
+            <h3>${escapeHtml(product.name || "Produk")}</h3>
+            <p>${escapeHtml(product.description || `Akses ${product.accessLevel || "starter"}`)}</p>
+            <p><strong>${formatCurrency(product.price)}</strong></p>
+            <div class="actions">
+              ${product.downloadUrl ? `<a class="btn" href="${escapeHtml(product.downloadUrl)}" target="_blank" rel="noopener">${icon("download")}Download</a>` : ""}
+              <a class="btn primary" href="${checkout}">${icon("shopping-cart")}Checkout</a>
+            </div>
+          </div>
+        </article>
+      `;
+    }).join("");
+    hydrateIcons();
+  } catch (error) {
+    target.innerHTML = `<div class="notice error">Gagal memuat produk: ${escapeHtml(error.message)}</div>`;
+  }
 }
 
 document.addEventListener("DOMContentLoaded", () => {

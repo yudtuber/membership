@@ -114,6 +114,14 @@ export const dataApi = {
       createdAt: serverTimestamp()
     });
   },
+  createPayout(payload) {
+    return addDoc(collection(db, "payouts"), {
+      ...payload,
+      amount: Number(payload.amount || 0),
+      status: payload.status || "pending",
+      createdAt: serverTimestamp()
+    });
+  },
   track(collectionName, payload) {
     return addDoc(collection(db, collectionName), {
       ...payload,
