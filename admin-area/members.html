@@ -1,1 +1,79 @@
-<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Members - MembershipPro</title><link rel="stylesheet" href="../assets/css/styles.css"><script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script><script type="module" src="../assets/js/app.js"></script></head><body data-base="../" data-area="admin" data-protected="true" data-role="admin"><div class="layout"><aside class="sidebar" data-sidebar></aside><main class="content"><div class="page-head"><div><p class="eyebrow">Admin area</p><h1>Members</h1><p>Kelola akun, plan, status, dan role member.</p></div><button class="btn primary"><i data-lucide="user-plus"></i>Tambah</button></div><div class="table-wrap"><table><thead><tr><th>Nama</th><th>Plan</th><th>Status</th></tr></thead><tbody><tr><td>Raka Pratama</td><td>Premium</td><td><span class="badge active">Active</span></td></tr><tr><td>Nadia Putri</td><td>Starter</td><td><span class="badge active">Active</span></td></tr><tr><td>Arief Hidayat</td><td>Trial</td><td><span class="badge pending">Trial</span></td></tr></tbody></table></div></main></div></body></html>
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Members - MembershipPro</title>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+  <script type="module" src="../assets/js/app.js"></script>
+</head>
+<body data-base="../" data-area="admin" data-protected="true" data-role="admin">
+  <div class="layout">
+    <aside class="sidebar" data-sidebar></aside>
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Admin area</p>
+          <h1>Members</h1>
+          <p>Kelola akun, plan, status, dan role member.</p>
+        </div>
+        <a class="btn primary" href="#member-form"><i data-lucide="user-plus"></i>Tambah</a>
+      </div>
+
+      <section class="grid two" style="margin-bottom:16px">
+        <article class="card" id="member-form">
+          <div class="card-body">
+            <h2>Tambah Member Manual</h2>
+            <form class="form" data-admin-member-form>
+              <div class="form-row">
+                <label>Nama</label>
+                <input name="name" required>
+              </div>
+              <div class="form-row">
+                <label>Email</label>
+                <input type="email" name="email" required>
+              </div>
+              <div class="form-row">
+                <label>Plan</label>
+                <select name="plan">
+                  <option value="starter">Starter</option>
+                  <option value="premium">Premium</option>
+                  <option value="pro">Pro</option>
+                  <option value="enterprise">Enterprise</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label>Role</label>
+                <select name="role">
+                  <option value="member">Member</option>
+                  <option value="affiliate">Affiliate</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label>Status</label>
+                <select name="status">
+                  <option value="active">Active</option>
+                  <option value="trial">Trial</option>
+                  <option value="blocked">Blocked</option>
+                </select>
+              </div>
+              <button class="btn primary" type="submit"><i data-lucide="save"></i>Simpan Member</button>
+              <div data-form-status></div>
+            </form>
+          </div>
+        </article>
+        <article class="card">
+          <div class="card-body">
+            <h2>Catatan Login</h2>
+            <p>Tambah manual membuat data member di Firestore. Agar user bisa login, user tetap perlu daftar melalui halaman register atau dibuatkan akun via Firebase Authentication.</p>
+          </div>
+        </article>
+      </section>
+
+      <div class="table-wrap" data-demo-table="members"></div>
+    </main>
+  </div>
+</body>
+</html>
