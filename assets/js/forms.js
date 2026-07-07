@@ -12,7 +12,11 @@ document.addEventListener("submit", async (event) => {
   const form = event.target;
   if (!form.matches("[data-public-form]")) return;
   event.preventDefault();
-  const data = Object.fromEntries(new FormData(form));
+  const data = {
+    ...Object.fromEntries(new FormData(form)),
+    affiliateCode: localStorage.getItem("affiliateRef") || "",
+    campaign: new URLSearchParams(window.location.search).get("campaign") || ""
+  };
   const type = form.dataset.publicForm;
 
   try {

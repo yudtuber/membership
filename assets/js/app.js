@@ -118,6 +118,7 @@ function requireAuth() {
     await renderProductGallery(profile);
     await renderAffiliateDashboard(profile);
     await renderAffiliatePayouts(profile);
+    await renderAffiliatePageTable(profile);
     hydrateIcons();
   });
 }
@@ -244,6 +245,10 @@ function statusBadge(value) {
 
 function affiliateCodeFromProfile(profile) {
   return profile?.affiliateCode || profile?.code || slugify(profile?.name || profile?.email || "affiliate");
+}
+
+function hasSavedAffiliateCode(profile) {
+  return Boolean(profile?.affiliateCode || profile?.code);
 }
 
 function tableHtml(headers, rows) {
@@ -487,13 +492,24 @@ async function renderAffiliateDashboard(profile) {
     `;
   }
 
+  if (!hasSavedAffiliateCode(profile)) {
+    if (statsTarget) {
+      statsTarget.innerHTML = `<div class="notice">Simpan kode affiliate unik terlebih dahulu di Link Generator agar dashboard bisa membaca data real.</div>`;
+    }
+    if (tableTarget) {
+      tableTarget.innerHTML = `<div class="notice">Belum ada kode affiliate tersimpan.</div>`;
+    }
+    hydrateIcons();
+    return;
+  }
+
   try {
     const [views, clicks, leads, sales, payouts] = await Promise.all([
       dataApi.byField("views", "affiliateCode", affiliateCode, 100),
       dataApi.byField("clicks", "affiliateCode", affiliateCode, 100),
       dataApi.byField("leads", "affiliateCode", affiliateCode, 100),
       dataApi.byField("sales", "affiliateCode", affiliateCode, 100),
-      dataApi.byField("payouts", "affiliateCode", affiliateCode, 100)
+      dataApi.byField("payouts", "email", profile?.email || "", 100)
     ]);
     const salesTotal = sales.reduce((total, sale) => total + Number(sale.amount || 0), 0);
     const paidTotal = payouts
@@ -522,6 +538,89 @@ async function renderAffiliateDashboard(profile) {
     if (statsTarget) statsTarget.innerHTML = `<div class="notice error">Gagal membaca data affiliate: ${escapeHtml(error.message)}</div>`;
   }
   hydrateIcons();
+}
+
+function currentAffiliateTableType() {
+  const file = currentFile();
+  if (file === "clicks.html") return "clicks";
+  if (file === "views.html") return "views";
+  if (file === "leads.html") return "leads";
+  if (file === "sales.html") return "sales";
+  if (file === "commissions.html") return "commissions";
+  return "";
+}
+
+async function renderAffiliatePageTable(profile) {
+  const target = document.querySelector("[data-affiliate-table]");
+  if (!target) return;
+  const type = target.dataset.affiliateTable || currentAffiliateTableType();
+  const affiliateCode = affiliateCodeFromProfile(profile);
+  target.innerHTML = `<div class="notice">Memuat data affiliate...</div>`;
+
+  if (!hasSavedAffiliateCode(profile)) {
+    target.innerHTML = `<div class="notice">Simpan kode affiliate unik terlebih dahulu di Link Generator agar data real bisa dibaca.</div>`;
+    return;
+  }
+
+  try {
+    if (type === "clicks" || type === "views") {
+      const items = await dataApi.byField(type, "affiliateCode", affiliateCode, 100);
+      target.innerHTML = tableHtml(["Tanggal", "Campaign", "Page", "Event"], items.map((item) => [
+        formatDate(item.createdAt),
+        escapeHtml(item.campaign || "-"),
+        escapeHtml(item.page || "-"),
+        escapeHtml(item.label || item.title || type)
+      ]));
+      return;
+    }
+
+    if (type === "leads") {
+      const leads = await dataApi.byField("leads", "affiliateCode", affiliateCode, 100);
+      target.innerHTML = tableHtml(["Tanggal", "Nama", "Email", "Campaign", "Minat"], leads.map((lead) => [
+        formatDate(lead.createdAt),
+        escapeHtml(lead.name || "-"),
+        escapeHtml(lead.email || "-"),
+        escapeHtml(lead.campaign || "-"),
+        escapeHtml(lead.interest || "-")
+      ]));
+      return;
+    }
+
+    if (type === "sales") {
+      const sales = await dataApi.byField("sales", "affiliateCode", affiliateCode, 100);
+      target.innerHTML = tableHtml(["Tanggal", "Order ID", "Nominal", "Status"], sales.map((sale) => [
+        formatDate(sale.createdAt),
+        escapeHtml(sale.orderId || "-"),
+        formatCurrency(sale.amount),
+        statusBadge(sale.status || "pending")
+      ]));
+      return;
+    }
+
+    if (type === "commissions") {
+      const [sales, payouts] = await Promise.all([
+        dataApi.byField("sales", "affiliateCode", affiliateCode, 100),
+        dataApi.byField("payouts", "email", profile?.email || "", 100)
+      ]);
+      const salesTotal = sales.reduce((total, sale) => total + Number(sale.amount || 0), 0);
+      const paidTotal = payouts
+        .filter((payout) => String(payout.status || "").toLowerCase() === "paid")
+        .reduce((total, payout) => total + Number(payout.amount || 0), 0);
+      const pendingTotal = payouts
+        .filter((payout) => String(payout.status || "").toLowerCase() === "pending")
+        .reduce((total, payout) => total + Number(payout.amount || 0), 0);
+      const commissionTotal = Math.round(salesTotal * 0.3);
+      target.innerHTML = tableHtml(["Keterangan", "Nominal", "Status"], [
+        ["Total Sales", formatCurrency(salesTotal), statusBadge("active")],
+        ["Estimasi Komisi 30%", formatCurrency(commissionTotal), statusBadge("active")],
+        ["Payout Pending", formatCurrency(pendingTotal), statusBadge("pending")],
+        ["Sudah Terbayar", formatCurrency(paidTotal), statusBadge("paid")],
+        ["Sisa Komisi", formatCurrency(Math.max(0, commissionTotal - paidTotal)), statusBadge("pending")]
+      ]);
+    }
+  } catch (error) {
+    target.innerHTML = `<div class="notice error">Gagal memuat data affiliate: ${escapeHtml(error.message)}</div>`;
+  }
 }
 
 function bindLinkGenerator() {
@@ -771,8 +870,12 @@ async function renderAffiliatePayouts(profile) {
   if (!target) return;
   const affiliateCode = affiliateCodeFromProfile(profile);
   target.innerHTML = `<div class="notice">Memuat payout...</div>`;
+  if (!hasSavedAffiliateCode(profile)) {
+    target.innerHTML = `<div class="notice">Simpan kode affiliate unik terlebih dahulu di Link Generator.</div>`;
+    return;
+  }
   try {
-    const payouts = await dataApi.byField("payouts", "affiliateCode", affiliateCode, 50);
+    const payouts = await dataApi.byField("payouts", "email", profile?.email || "", 50);
     target.innerHTML = tableHtml(["Tanggal", "Rekening", "Nominal", "Status"], payouts.map((payout) => [
       formatDate(payout.createdAt),
       escapeHtml([payout.bankName, payout.bankAccountNumber, payout.bankAccountName].filter(Boolean).join(" - ") || "-"),
