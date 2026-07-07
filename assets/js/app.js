@@ -110,7 +110,11 @@ function requireAuth() {
     });
     if (document.body.dataset.role === "admin" && profile?.role !== "admin") {
       location.href = `${base}member-area/dashboard.html`;
+      return;
     }
+    await renderStats(profile);
+    await renderTable(profile);
+    hydrateIcons();
   });
 }
 
@@ -124,24 +128,212 @@ function bindLogout() {
   });
 }
 
-function renderStats() {
-  const stats = document.querySelector("[data-stats]");
-  if (!stats) return;
-  const area = document.body.dataset.area || "member";
-  const values = {
-    member: [["Produk Aktif", "12"], ["Download", "248"], ["Invoice", "8"]],
-    affiliate: [["Clicks", "1.284"], ["Leads", "316"], ["Komisi", "Rp4,8jt"]],
-    admin: [["Members", "2.418"], ["Orders", "684"], ["Revenue", "Rp182jt"]]
-  };
-  stats.innerHTML = values[area].map(([label, value]) => `
+function formatNumber(value) {
+  return new Intl.NumberFormat("id-ID").format(Number(value || 0));
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0
+  }).format(Number(value || 0));
+}
+
+function formatDate(value) {
+  if (!value) return "-";
+  const date = typeof value.toDate === "function" ? value.toDate() : new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  }).format(date);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function renderMetricCards(target, values) {
+  target.innerHTML = values.map(([label, value]) => `
     <article class="card"><div class="card-body metric"><span class="muted">${label}</span><strong>${value}</strong></div></article>
   `).join("");
 }
 
-function renderTable() {
+async function renderStats() {
+  const stats = document.querySelector("[data-stats]");
+  if (!stats) return;
+  const area = document.body.dataset.area || "member";
+  stats.innerHTML = `
+    <article class="card"><div class="card-body metric"><span class="muted">Loading</span><strong>...</strong></div></article>
+  `;
+
+  if (area === "admin") {
+    try {
+      const [members, orders, leads, tickets, views, clicks, sales] = await Promise.all([
+        dataApi.count("members"),
+        dataApi.count("orders"),
+        dataApi.count("leads"),
+        dataApi.count("supportTickets"),
+        dataApi.count("views"),
+        dataApi.count("clicks"),
+        dataApi.latest("sales", 100)
+      ]);
+      const revenue = sales.reduce((total, sale) => total + Number(sale.amount || 0), 0);
+      renderMetricCards(stats, [
+        ["Members", formatNumber(members)],
+        ["Orders", formatNumber(orders)],
+        ["Leads", formatNumber(leads)],
+        ["Tickets", formatNumber(tickets)],
+        ["Views", formatNumber(views)],
+        ["Clicks", formatNumber(clicks)],
+        ["Revenue", formatCurrency(revenue)]
+      ]);
+      return;
+    } catch (error) {
+      stats.innerHTML = `<div class="notice error">Gagal membaca statistik Firestore: ${escapeHtml(error.message)}</div>`;
+      return;
+    }
+  }
+
+  const values = {
+    member: [["Produk Aktif", "12"], ["Download", "248"], ["Invoice", "8"]],
+    affiliate: [["Clicks", "1.284"], ["Leads", "316"], ["Komisi", "Rp4,8jt"]]
+  };
+  renderMetricCards(stats, values[area] || values.member);
+}
+
+function statusBadge(value) {
+  const text = escapeHtml(value || "-");
+  const normalized = String(value || "").toLowerCase();
+  const type = ["pending", "review", "open", "trial", "processing"].includes(normalized) ? "pending" : "active";
+  return `<span class="badge ${type}">${text}</span>`;
+}
+
+function tableHtml(headers, rows) {
+  if (!rows.length) {
+    return `<div class="notice">Belum ada data Firestore untuk halaman ini.</div>`;
+  }
+  return `
+    <table>
+      <thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody>
+    </table>
+  `;
+}
+
+function currentAdminTableType(type) {
+  const file = currentFile();
+  if (file === "members.html") return "members";
+  if (file === "orders.html" || type === "orders") return "orders";
+  if (file === "affiliates.html") return "affiliates";
+  if (file === "support-tickets.html" || type === "tickets") return "tickets";
+  if (file === "click-statistics.html") return "clicks";
+  if (file === "view-statistics.html") return "views";
+  if (file === "sales-statistics.html") return "sales";
+  if (file === "products.html") return "products";
+  return type;
+}
+
+async function renderAdminTable(table, type) {
+  const tableType = currentAdminTableType(type);
+  table.innerHTML = `<div class="notice">Memuat data Firestore...</div>`;
+
+  try {
+    if (tableType === "members") {
+      const members = await dataApi.latest("members", 50);
+      table.innerHTML = tableHtml(["Nama", "Email", "Plan", "Role", "Status"], members.map((member) => [
+        escapeHtml(member.name || "-"),
+        escapeHtml(member.email || "-"),
+        escapeHtml(member.plan || "-"),
+        statusBadge(member.role || "-"),
+        statusBadge(member.status || "-")
+      ]));
+      return;
+    }
+
+    if (tableType === "orders") {
+      const orders = await dataApi.latest("orders", 50);
+      table.innerHTML = tableHtml(["Order ID", "Nama", "Plan", "Nominal", "Payment", "Status"], orders.map((order) => [
+        escapeHtml(order.id),
+        escapeHtml(order.name || order.email || "-"),
+        escapeHtml(order.plan || "-"),
+        formatCurrency(order.amount),
+        escapeHtml(order.gateway || "manual"),
+        statusBadge(order.status || "pending")
+      ]));
+      return;
+    }
+
+    if (tableType === "tickets") {
+      const tickets = await dataApi.latest("supportTickets", 50);
+      table.innerHTML = tableHtml(["Ticket ID", "Email", "Subjek", "Tanggal", "Status"], tickets.map((ticket) => [
+        escapeHtml(ticket.id),
+        escapeHtml(ticket.email || "-"),
+        escapeHtml(ticket.subject || "-"),
+        formatDate(ticket.createdAt),
+        statusBadge(ticket.status || "open")
+      ]));
+      return;
+    }
+
+    if (tableType === "clicks" || tableType === "views") {
+      const items = await dataApi.latest(tableType, 50);
+      table.innerHTML = tableHtml(["Tanggal", "Affiliate", "Campaign", "Page", "Event"], items.map((item) => [
+        formatDate(item.createdAt),
+        escapeHtml(item.affiliateCode || "-"),
+        escapeHtml(item.campaign || "-"),
+        escapeHtml(item.page || "-"),
+        escapeHtml(item.label || item.title || tableType)
+      ]));
+      return;
+    }
+
+    if (tableType === "sales") {
+      const sales = await dataApi.latest("sales", 50);
+      table.innerHTML = tableHtml(["Tanggal", "Order ID", "Affiliate", "Nominal", "Status"], sales.map((sale) => [
+        formatDate(sale.createdAt),
+        escapeHtml(sale.orderId || "-"),
+        escapeHtml(sale.affiliateCode || "-"),
+        formatCurrency(sale.amount),
+        statusBadge(sale.status || "pending")
+      ]));
+      return;
+    }
+
+    if (tableType === "affiliates") {
+      const applications = await dataApi.latest("affiliateApplications", 50);
+      table.innerHTML = tableHtml(["Nama", "Email", "Channel", "Tanggal", "Status"], applications.map((item) => [
+        escapeHtml(item.name || "-"),
+        escapeHtml(item.email || "-"),
+        escapeHtml(item.channel || "-"),
+        formatDate(item.createdAt),
+        statusBadge(item.status || "review")
+      ]));
+      return;
+    }
+  } catch (error) {
+    table.innerHTML = `<div class="notice error">Gagal membaca data Firestore: ${escapeHtml(error.message)}</div>`;
+    return;
+  }
+
+  table.innerHTML = `<div class="notice">Data ${escapeHtml(tableType)} belum dibuat di Firestore.</div>`;
+}
+
+async function renderTable() {
   const table = document.querySelector("[data-demo-table]");
   if (!table) return;
   const type = table.dataset.demoTable;
+  if (document.body.dataset.area === "admin") {
+    await renderAdminTable(table, type);
+    return;
+  }
   const rows = {
     products: [["Kelas Growth Funnel", "Premium", "Aktif"], ["Template Landing Page", "Starter", "Aktif"], ["Swipe File Ads", "Pro", "Draft"]],
     orders: [["ORD-1007", "Raka Pratama", "Rp499.000", "Pending"], ["ORD-1006", "Nadia Putri", "Rp1.299.000", "Paid"], ["ORD-1005", "Arief Hidayat", "Rp499.000", "Paid"]],
@@ -185,8 +377,10 @@ document.addEventListener("DOMContentLoaded", () => {
   renderTopbar();
   renderFooter();
   renderSidebar();
-  renderStats();
-  renderTable();
+  if (!document.body.dataset.protected) {
+    renderStats();
+    renderTable();
+  }
   requireAuth();
   bindLogout();
   bindLinkGenerator();
