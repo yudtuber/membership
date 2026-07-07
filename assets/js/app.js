@@ -160,6 +160,18 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function selectHtml(field, value, options) {
+  return `
+    <select data-field="${escapeHtml(field)}">
+      ${options.map((option) => `<option value="${escapeHtml(option)}" ${String(value || "") === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+    </select>
+  `;
+}
+
+function actionButton(action, collectionName, id, label) {
+  return `<button class="btn" type="button" data-admin-action="${escapeHtml(action)}" data-collection="${escapeHtml(collectionName)}" data-id="${escapeHtml(id)}">${escapeHtml(label)}</button>`;
+}
+
 function renderMetricCards(target, values) {
   target.innerHTML = values.map(([label, value]) => `
     <article class="card"><div class="card-body metric"><span class="muted">${label}</span><strong>${value}</strong></div></article>
@@ -250,50 +262,55 @@ async function renderAdminTable(table, type) {
   try {
     if (tableType === "members") {
       const members = await dataApi.latest("members", 50);
-      table.innerHTML = tableHtml(["Nama", "Email", "Plan", "Role", "Status"], members.map((member) => [
+      table.innerHTML = tableHtml(["Nama", "Email", "Plan", "Role", "Status", "Aksi"], members.map((member) => [
         escapeHtml(member.name || "-"),
         escapeHtml(member.email || "-"),
-        escapeHtml(member.plan || "-"),
-        statusBadge(member.role || "-"),
-        statusBadge(member.status || "-")
+        selectHtml("plan", member.plan, ["starter", "premium", "pro", "enterprise"]),
+        selectHtml("role", member.role, ["member", "affiliate", "admin"]),
+        selectHtml("status", member.status, ["trial", "active", "blocked"]),
+        actionButton("update-row", "members", member.id, "Simpan")
       ]));
       return;
     }
 
     if (tableType === "orders") {
       const orders = await dataApi.latest("orders", 50);
-      table.innerHTML = tableHtml(["Order ID", "Nama", "Plan", "Nominal", "Payment", "Status"], orders.map((order) => [
+      table.innerHTML = tableHtml(["Order ID", "Nama", "Plan", "Nominal", "Payment", "Status", "Aksi"], orders.map((order) => [
         escapeHtml(order.id),
-        escapeHtml(order.name || order.email || "-"),
-        escapeHtml(order.plan || "-"),
+        `${escapeHtml(order.name || order.email || "-")}<input type="hidden" data-field="email" value="${escapeHtml(order.email || "")}">`,
+        `${escapeHtml(order.plan || "-")}<input type="hidden" data-field="plan" value="${escapeHtml(order.plan || "")}">`,
         formatCurrency(order.amount),
         escapeHtml(order.gateway || "manual"),
-        statusBadge(order.status || "pending")
+        selectHtml("status", order.status, ["pending", "paid", "cancelled", "refunded"]),
+        actionButton("update-row", "orders", order.id, "Update")
       ]));
       return;
     }
 
     if (tableType === "products") {
       const products = await dataApi.latest("products", 50);
-      table.innerHTML = tableHtml(["Produk", "Plan", "Harga", "Akses", "Download", "Status"], products.map((product) => [
+      table.innerHTML = tableHtml(["Produk", "Plan", "Harga", "Akses", "Download", "Status", "Aksi"], products.map((product) => [
         escapeHtml(product.name || "-"),
         escapeHtml(product.plan || product.slug || "-"),
         formatCurrency(product.price),
-        escapeHtml(product.accessLevel || "-"),
+        selectHtml("accessLevel", product.accessLevel, ["starter", "premium", "pro", "enterprise"]),
         product.downloadUrl ? `<a href="${escapeHtml(product.downloadUrl)}" target="_blank" rel="noopener">Link</a>` : "-",
-        statusBadge(product.status || "active")
+        selectHtml("status", product.status, ["active", "draft", "archived"]),
+        actionButton("update-row", "products", product.id, "Simpan")
       ]));
       return;
     }
 
     if (tableType === "tickets") {
       const tickets = await dataApi.latest("supportTickets", 50);
-      table.innerHTML = tableHtml(["Ticket ID", "Email", "Subjek", "Tanggal", "Status"], tickets.map((ticket) => [
+      table.innerHTML = tableHtml(["Ticket ID", "Email", "Subjek", "Pesan", "Balasan", "Status", "Aksi"], tickets.map((ticket) => [
         escapeHtml(ticket.id),
         escapeHtml(ticket.email || "-"),
         escapeHtml(ticket.subject || "-"),
-        formatDate(ticket.createdAt),
-        statusBadge(ticket.status || "open")
+        escapeHtml(ticket.message || "-"),
+        `<textarea data-field="reply" placeholder="Tulis balasan">${escapeHtml(ticket.reply || "")}</textarea>`,
+        selectHtml("status", ticket.status, ["open", "answered", "closed"]),
+        actionButton("reply-ticket", "supportTickets", ticket.id, "Kirim Balasan")
       ]));
       return;
     }
@@ -324,12 +341,13 @@ async function renderAdminTable(table, type) {
 
     if (tableType === "affiliates") {
       const applications = await dataApi.latest("affiliateApplications", 50);
-      table.innerHTML = tableHtml(["Nama", "Email", "Channel", "Tanggal", "Status"], applications.map((item) => [
-        escapeHtml(item.name || "-"),
-        escapeHtml(item.email || "-"),
+      table.innerHTML = tableHtml(["Nama", "Email", "Channel", "Tanggal", "Status", "Aksi"], applications.map((item) => [
+        `${escapeHtml(item.name || "-")}<input type="hidden" data-field="name" value="${escapeHtml(item.name || "")}">`,
+        `${escapeHtml(item.email || "-")}<input type="hidden" data-field="email" value="${escapeHtml(item.email || "")}">`,
         escapeHtml(item.channel || "-"),
         formatDate(item.createdAt),
-        statusBadge(item.status || "review")
+        selectHtml("status", item.status, ["review", "approved", "rejected", "blocked"]),
+        `${actionButton("update-row", "affiliateApplications", item.id, "Simpan")} ${actionButton("approve-affiliate", "affiliateApplications", item.id, "Approve")}`
       ]));
       return;
     }
@@ -382,9 +400,16 @@ function bindNewsletterAdmin() {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(form));
-    await dataApi.track("newsletterBroadcasts", data);
+    const recipientCount = await dataApi.count(data.targetCollection || "newsletter");
+    await dataApi.track("newsletterBroadcasts", {
+      ...data,
+      recipientCount,
+      status: "queued"
+    });
     form.reset();
-    document.querySelector("[data-form-status]").textContent = "Newsletter disimpan sebagai draft broadcast.";
+    const status = document.querySelector("[data-form-status]");
+    status.className = "notice success";
+    status.textContent = `Broadcast disimpan untuk ${formatNumber(recipientCount)} target. Untuk kirim email otomatis, sambungkan Cloud Function/email service.`;
   });
 }
 
@@ -413,6 +438,113 @@ function bindProductAdmin() {
   });
 }
 
+function bindMemberAdmin() {
+  const form = document.querySelector("[data-admin-member-form]");
+  if (!form) return;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(form));
+    const status = form.querySelector("[data-form-status]");
+    try {
+      await dataApi.createMember(data);
+      form.reset();
+      if (status) {
+        status.className = "notice success";
+        status.textContent = "Member manual berhasil ditambahkan ke Firestore. Untuk login, user tetap perlu register via halaman daftar.";
+      }
+      await renderTable();
+      await renderStats();
+    } catch (error) {
+      if (status) {
+        status.className = "notice error";
+        status.textContent = error.message;
+      }
+    }
+  });
+}
+
+function collectRowPayload(row) {
+  const payload = {};
+  row.querySelectorAll("[data-field]").forEach((field) => {
+    payload[field.dataset.field] = field.value;
+  });
+  return payload;
+}
+
+function showActionStatus(message, type = "success") {
+  let status = document.querySelector("[data-admin-action-status]");
+  if (!status) {
+    status = document.createElement("div");
+    status.dataset.adminActionStatus = "";
+    const content = document.querySelector(".content");
+    content?.prepend(status);
+  }
+  status.className = `notice ${type}`;
+  status.textContent = message;
+}
+
+function bindAdminActions() {
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-admin-action]");
+    if (!button) return;
+    const row = button.closest("tr");
+    const action = button.dataset.adminAction;
+    const collectionName = button.dataset.collection;
+    const id = button.dataset.id;
+    const payload = collectRowPayload(row || document);
+
+    try {
+      if (action === "approve-affiliate") {
+        payload.status = "approved";
+      }
+      if (action === "reply-ticket") {
+        payload.status = payload.status || "answered";
+        payload.repliedAt = new Date().toISOString();
+        await dataApi.track("supportReplies", {
+          ticketId: id,
+          reply: payload.reply,
+          status: payload.status
+        });
+      }
+      payload.updatedAt = new Date().toISOString();
+      await dataApi.update(collectionName, id, payload);
+      if (collectionName === "orders" && payload.status === "paid" && payload.email) {
+        const members = await dataApi.byField("members", "email", payload.email, 1);
+        if (members[0]) {
+          await dataApi.update("members", members[0].id, {
+            status: "active",
+            plan: payload.plan || members[0].plan || "starter",
+            updatedAt: new Date().toISOString()
+          });
+        }
+      }
+      if (collectionName === "affiliateApplications" && payload.status === "approved" && payload.email) {
+        const members = await dataApi.byField("members", "email", payload.email, 1);
+        if (members[0]) {
+          await dataApi.update("members", members[0].id, {
+            role: "affiliate",
+            status: "active",
+            updatedAt: new Date().toISOString()
+          });
+        } else {
+          await dataApi.createMember({
+            name: payload.name || payload.email,
+            email: payload.email,
+            role: "affiliate",
+            status: "active",
+            plan: "starter"
+          });
+        }
+      }
+      showActionStatus("Data berhasil diperbarui.");
+      await renderTable();
+      await renderStats();
+    } catch (error) {
+      showActionStatus(error.message, "error");
+    }
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   renderTopbar();
   renderFooter();
@@ -426,6 +558,8 @@ document.addEventListener("DOMContentLoaded", () => {
   bindLinkGenerator();
   bindNewsletterAdmin();
   bindProductAdmin();
+  bindMemberAdmin();
+  bindAdminActions();
   hydrateIcons();
   trackView();
 });

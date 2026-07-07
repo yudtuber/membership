@@ -105,6 +105,15 @@ export const dataApi = {
       createdAt: serverTimestamp()
     });
   },
+  createMember(payload) {
+    return addDoc(collection(db, "members"), {
+      ...payload,
+      role: payload.role || "member",
+      status: payload.status || "active",
+      plan: payload.plan || "starter",
+      createdAt: serverTimestamp()
+    });
+  },
   track(collectionName, payload) {
     return addDoc(collection(db, collectionName), {
       ...payload,
