@@ -1,1 +1,86 @@
-<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Products - MembershipPro</title><link rel="stylesheet" href="../assets/css/styles.css"><script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script><script type="module" src="../assets/js/app.js"></script></head><body data-base="../" data-area="admin" data-protected="true" data-role="admin"><div class="layout"><aside class="sidebar" data-sidebar></aside><main class="content"><div class="page-head"><div><p class="eyebrow">Admin area</p><h1>Products</h1><p>Kelola metadata produk dan path file Storage.</p></div><button class="btn primary"><i data-lucide="package-plus"></i>Produk</button></div><div class="table-wrap" data-demo-table="products"></div></main></div></body></html>
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Products - MembershipPro</title>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+  <script type="module" src="../assets/js/app.js"></script>
+</head>
+<body data-base="../" data-area="admin" data-protected="true" data-role="admin">
+  <div class="layout">
+    <aside class="sidebar" data-sidebar></aside>
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Admin area</p>
+          <h1>Products</h1>
+          <p>Tambah produk, atur slug checkout, harga, akses, dan link download.</p>
+        </div>
+        <a class="btn primary" href="#product-form"><i data-lucide="package-plus"></i>Produk</a>
+      </div>
+
+      <section class="grid two" style="margin-bottom:16px">
+        <article class="card" id="product-form">
+          <div class="card-body">
+            <h2>Tambah Produk</h2>
+            <form class="form" data-admin-product-form>
+              <div class="form-row">
+                <label>Nama Produk</label>
+                <input name="name" placeholder="Template Canva Premium" required>
+              </div>
+              <div class="form-row">
+                <label>Slug / Plan Checkout</label>
+                <input name="plan" placeholder="template-canva-premium" required>
+              </div>
+              <div class="form-row">
+                <label>Harga</label>
+                <input type="number" name="price" placeholder="99000" required>
+              </div>
+              <div class="form-row">
+                <label>Akses</label>
+                <select name="accessLevel">
+                  <option value="starter">Starter</option>
+                  <option value="premium">Premium</option>
+                  <option value="pro">Pro</option>
+                  <option value="enterprise">Enterprise</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label>Sales Page URL</label>
+                <input name="salesPageUrl" placeholder="https://username.github.io/membership/salespage.html">
+              </div>
+              <div class="form-row">
+                <label>Download URL</label>
+                <input name="downloadUrl" placeholder="https://drive.google.com/...">
+              </div>
+              <div class="form-row">
+                <label>Status</label>
+                <select name="status">
+                  <option value="active">Active</option>
+                  <option value="draft">Draft</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </div>
+              <button class="btn primary" type="submit"><i data-lucide="save"></i>Simpan Produk</button>
+              <div data-form-status></div>
+            </form>
+          </div>
+        </article>
+        <article class="card">
+          <div class="card-body">
+            <h2>Link Checkout</h2>
+            <p>Setelah produk disimpan, arahkan tombol beli landing page ke format berikut:</p>
+            <div class="notice">direct-link-forms/checkout.html?plan=slug-produk&amount=harga</div>
+            <p>Contoh:</p>
+            <div class="notice">direct-link-forms/checkout.html?plan=template-canva-premium&amount=99000</div>
+          </div>
+        </article>
+      </section>
+
+      <div class="table-wrap" data-demo-table="products"></div>
+    </main>
+  </div>
+</body>
+</html>
