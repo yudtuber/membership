@@ -97,6 +97,14 @@ export const dataApi = {
       createdAt: serverTimestamp()
     });
   },
+  createProduct(payload) {
+    return addDoc(collection(db, "products"), {
+      ...payload,
+      price: Number(payload.price || 0),
+      status: payload.status || "active",
+      createdAt: serverTimestamp()
+    });
+  },
   track(collectionName, payload) {
     return addDoc(collection(db, collectionName), {
       ...payload,
