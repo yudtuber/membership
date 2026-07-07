@@ -12,6 +12,13 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/members/$(request.auth.uid))
         && get(/databases/$(database)/documents/members/$(request.auth.uid)).data.role == "admin";
     }
+    function hasMemberDoc() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/members/$(request.auth.uid));
+    }
+    function myAffiliateCode() {
+      return get(/databases/$(database)/documents/members/$(request.auth.uid)).data.affiliateCode;
+    }
 
     match /members/{uid} {
       allow create: if isOwner(uid);
@@ -27,7 +34,8 @@ service cloud.firestore {
 
     match /leads/{id} {
       allow create: if true;
-      allow read, update, delete: if isAdmin();
+      allow read: if isAdmin() || (hasMemberDoc() && resource.data.affiliateCode == myAffiliateCode());
+      allow update, delete: if isAdmin();
     }
 
     match /newsletter/{id} {
@@ -62,17 +70,20 @@ service cloud.firestore {
 
     match /views/{id} {
       allow create: if true;
-      allow read, update, delete: if isAdmin();
+      allow read: if isAdmin() || (hasMemberDoc() && resource.data.affiliateCode == myAffiliateCode());
+      allow update, delete: if isAdmin();
     }
 
     match /clicks/{id} {
       allow create: if true;
-      allow read, update, delete: if isAdmin();
+      allow read: if isAdmin() || (hasMemberDoc() && resource.data.affiliateCode == myAffiliateCode());
+      allow update, delete: if isAdmin();
     }
 
     match /sales/{id} {
       allow create: if true;
-      allow read, update, delete: if isAdmin();
+      allow read: if isAdmin() || (hasMemberDoc() && resource.data.affiliateCode == myAffiliateCode());
+      allow update, delete: if isAdmin();
     }
 
     match /{document=**} {
