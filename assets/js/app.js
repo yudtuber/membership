@@ -370,9 +370,42 @@ async function renderAdminTable(table, type) {
     }
 
     if (tableType === "affiliates") {
-      const applications = await dataApi.latest("affiliateApplications", 50);
-      const rows = await Promise.all(applications.map(async (item) => {
-        const affiliateCode = item.affiliateCode || item.code || slugify(item.name || item.email || item.id);
+      const [applications, members] = await Promise.all([
+        dataApi.latest("affiliateApplications", 100),
+        dataApi.latest("members", 100)
+      ]);
+      const affiliateMembers = members.filter((member) =>
+        member.role === "affiliate" || member.affiliateCode || member.bankAccountNumber
+      );
+      const mergedByEmail = new Map();
+
+      applications.forEach((item) => {
+        const key = item.email || item.id;
+        mergedByEmail.set(key, {
+          ...item,
+          sourceCollection: "affiliateApplications",
+          sourceId: item.id
+        });
+      });
+
+      affiliateMembers.forEach((member) => {
+        const key = member.email || member.id;
+        const existing = mergedByEmail.get(key) || {};
+        mergedByEmail.set(key, {
+          ...existing,
+          ...member,
+          bankName: member.bankName || existing.bankName || "",
+          bankAccountNumber: member.bankAccountNumber || existing.bankAccountNumber || "",
+          bankAccountName: member.bankAccountName || existing.bankAccountName || "",
+          affiliateCode: member.affiliateCode || existing.affiliateCode || existing.code || "",
+          sourceCollection: existing.sourceCollection || "members",
+          sourceId: existing.sourceId || member.id
+        });
+      });
+
+      const affiliateItems = Array.from(mergedByEmail.values());
+      const rows = await Promise.all(affiliateItems.map(async (item) => {
+        const affiliateCode = item.affiliateCode || item.code || slugify(item.name || item.email || item.sourceId || item.id);
         const [views, clicks, leads, sales, payouts] = await Promise.all([
           dataApi.byField("views", "affiliateCode", affiliateCode, 100),
           dataApi.byField("clicks", "affiliateCode", affiliateCode, 100),
@@ -395,8 +428,8 @@ async function renderAdminTable(table, type) {
             <input type="hidden" data-field="bankAccountName" value="${escapeHtml(item.bankAccountName || "")}">`,
           `${formatNumber(views.length)} / ${formatNumber(clicks.length)} / ${formatNumber(leads.length)} / ${formatNumber(sales.length)}`,
           `${formatCurrency(commissionDue)}<input data-field="payoutAmount" type="number" value="${commissionDue}">`,
-          selectHtml("status", item.status, ["review", "approved", "rejected", "blocked"]),
-          `${actionButton("update-row", "affiliateApplications", item.id, "Simpan")} ${actionButton("approve-affiliate", "affiliateApplications", item.id, "Approve")} ${actionButton("create-payout", "affiliateApplications", item.id, "Buat Payout")}`
+          selectHtml("status", item.status, ["review", "approved", "active", "rejected", "blocked"]),
+          `${actionButton("update-row", item.sourceCollection, item.sourceId, "Simpan")} ${actionButton("approve-affiliate", item.sourceCollection, item.sourceId, "Approve")} ${actionButton("create-payout", item.sourceCollection, item.sourceId, "Buat Payout")}`
         ];
       }));
       table.innerHTML = tableHtml(["Nama", "Email", "Kode", "Rekening", "Views/Clicks/Leads/Sales", "Komisi/Payout", "Status", "Aksi"], rows);
@@ -650,18 +683,26 @@ function bindAdminActions() {
           });
         }
       }
-      if (collectionName === "affiliateApplications" && payload.status === "approved" && payload.email) {
+      if ((collectionName === "affiliateApplications" || collectionName === "members") && payload.status === "approved" && payload.email) {
         const members = await dataApi.byField("members", "email", payload.email, 1);
         if (members[0]) {
           await dataApi.update("members", members[0].id, {
             role: "affiliate",
             status: "active",
+            affiliateCode: payload.affiliateCode || members[0].affiliateCode || "",
+            bankName: payload.bankName || members[0].bankName || "",
+            bankAccountNumber: payload.bankAccountNumber || members[0].bankAccountNumber || "",
+            bankAccountName: payload.bankAccountName || members[0].bankAccountName || "",
             updatedAt: new Date().toISOString()
           });
         } else {
           await dataApi.createMember({
             name: payload.name || payload.email,
             email: payload.email,
+            affiliateCode: payload.affiliateCode || "",
+            bankName: payload.bankName || "",
+            bankAccountNumber: payload.bankAccountNumber || "",
+            bankAccountName: payload.bankAccountName || "",
             role: "affiliate",
             status: "active",
             plan: "starter"
