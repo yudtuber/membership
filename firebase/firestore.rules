@@ -47,11 +47,17 @@ service cloud.firestore {
     }
 
     match /payouts/{id} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin() || (signedIn() && resource.data.email == request.auth.token.email);
+      allow write: if isAdmin();
     }
 
     match /supportReplies/{id} {
       allow read, write: if isAdmin();
+    }
+
+    match /affiliateApplications/{id} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
     }
 
     match /views/{id} {
