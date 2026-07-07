@@ -74,7 +74,8 @@ const menus = {
     ["click-statistics.html", "mouse-pointer-click", "Click Statistics"],
     ["view-statistics.html", "eye", "View Statistics"],
     ["newsletter.html", "mail", "Newsletter"],
-    ["support-tickets.html", "messages-square", "Support Tickets"]
+    ["support-tickets.html", "messages-square", "Support Tickets"],
+    ["payouts.html", "banknote", "Payouts"]
   ]
 };
 
@@ -115,6 +116,8 @@ function requireAuth() {
     await renderStats(profile);
     await renderTable(profile);
     await renderProductGallery(profile);
+    await renderAffiliateDashboard(profile);
+    await renderAffiliatePayouts(profile);
     hydrateIcons();
   });
 }
@@ -239,6 +242,10 @@ function statusBadge(value) {
   return `<span class="badge ${type}">${text}</span>`;
 }
 
+function affiliateCodeFromProfile(profile) {
+  return profile?.affiliateCode || profile?.code || slugify(profile?.name || profile?.email || "affiliate");
+}
+
 function tableHtml(headers, rows) {
   if (!rows.length) {
     return `<div class="notice">Belum ada data Firestore untuk halaman ini.</div>`;
@@ -261,6 +268,7 @@ function currentAdminTableType(type) {
   if (file === "view-statistics.html") return "views";
   if (file === "sales-statistics.html") return "sales";
   if (file === "products.html") return "products";
+  if (file === "payouts.html") return "payouts";
   return type;
 }
 
@@ -348,6 +356,19 @@ async function renderAdminTable(table, type) {
       return;
     }
 
+    if (tableType === "payouts") {
+      const payouts = await dataApi.latest("payouts", 50);
+      table.innerHTML = tableHtml(["Tanggal", "Affiliate", "Rekening", "Nominal", "Status", "Aksi"], payouts.map((payout) => [
+        formatDate(payout.createdAt),
+        `${escapeHtml(payout.name || payout.email || "-")}<input type="hidden" data-field="email" value="${escapeHtml(payout.email || "")}"><input type="hidden" data-field="affiliateCode" value="${escapeHtml(payout.affiliateCode || "")}">`,
+        escapeHtml([payout.bankName, payout.bankAccountNumber, payout.bankAccountName].filter(Boolean).join(" - ") || "-"),
+        formatCurrency(payout.amount),
+        selectHtml("status", payout.status, ["pending", "paid", "rejected"]),
+        actionButton("update-row", "payouts", payout.id, "Update")
+      ]));
+      return;
+    }
+
     if (tableType === "affiliates") {
       const applications = await dataApi.latest("affiliateApplications", 50);
       const rows = await Promise.all(applications.map(async (item) => {
@@ -368,13 +389,17 @@ async function renderAdminTable(table, type) {
           `${escapeHtml(item.name || "-")}<input type="hidden" data-field="name" value="${escapeHtml(item.name || "")}">`,
           `${escapeHtml(item.email || "-")}<input type="hidden" data-field="email" value="${escapeHtml(item.email || "")}">`,
           `<input data-field="affiliateCode" value="${escapeHtml(affiliateCode)}">`,
+          `${escapeHtml(item.bankName || "-")}<br>${escapeHtml(item.bankAccountNumber || "-")}<br>${escapeHtml(item.bankAccountName || "-")}
+            <input type="hidden" data-field="bankName" value="${escapeHtml(item.bankName || "")}">
+            <input type="hidden" data-field="bankAccountNumber" value="${escapeHtml(item.bankAccountNumber || "")}">
+            <input type="hidden" data-field="bankAccountName" value="${escapeHtml(item.bankAccountName || "")}">`,
           `${formatNumber(views.length)} / ${formatNumber(clicks.length)} / ${formatNumber(leads.length)} / ${formatNumber(sales.length)}`,
           `${formatCurrency(commissionDue)}<input data-field="payoutAmount" type="number" value="${commissionDue}">`,
           selectHtml("status", item.status, ["review", "approved", "rejected", "blocked"]),
           `${actionButton("update-row", "affiliateApplications", item.id, "Simpan")} ${actionButton("approve-affiliate", "affiliateApplications", item.id, "Approve")} ${actionButton("create-payout", "affiliateApplications", item.id, "Buat Payout")}`
         ];
       }));
-      table.innerHTML = tableHtml(["Nama", "Email", "Kode", "Views/Clicks/Leads/Sales", "Komisi/Payout", "Status", "Aksi"], rows);
+      table.innerHTML = tableHtml(["Nama", "Email", "Kode", "Rekening", "Views/Clicks/Leads/Sales", "Komisi/Payout", "Status", "Aksi"], rows);
       return;
     }
   } catch (error) {
@@ -407,16 +432,97 @@ async function renderTable() {
   `;
 }
 
+async function renderAffiliateDashboard(profile) {
+  const profileTarget = document.querySelector("[data-affiliate-profile]");
+  const statsTarget = document.querySelector("[data-affiliate-stats]");
+  const tableTarget = document.querySelector("[data-affiliate-performance]");
+  if (!profileTarget && !statsTarget && !tableTarget) return;
+
+  const affiliateCode = affiliateCodeFromProfile(profile);
+  if (profileTarget) {
+    profileTarget.innerHTML = `
+      <article class="card">
+        <div class="card-body">
+          <h2>Profil Affiliate</h2>
+          <p><strong>${escapeHtml(profile?.name || "-")}</strong></p>
+          <p>${escapeHtml(profile?.email || "-")}</p>
+          <div class="notice">Kode affiliate: <strong>${escapeHtml(affiliateCode)}</strong></div>
+          <div class="notice">Rekening: <strong>${escapeHtml([profile?.bankName, profile?.bankAccountNumber, profile?.bankAccountName].filter(Boolean).join(" - ") || "Belum diisi")}</strong></div>
+          <a class="btn primary" href="link-generator.html">${icon("link")}Buat Link Campaign</a>
+        </div>
+      </article>
+    `;
+  }
+
+  try {
+    const [views, clicks, leads, sales, payouts] = await Promise.all([
+      dataApi.byField("views", "affiliateCode", affiliateCode, 100),
+      dataApi.byField("clicks", "affiliateCode", affiliateCode, 100),
+      dataApi.byField("leads", "affiliateCode", affiliateCode, 100),
+      dataApi.byField("sales", "affiliateCode", affiliateCode, 100),
+      dataApi.byField("payouts", "affiliateCode", affiliateCode, 100)
+    ]);
+    const salesTotal = sales.reduce((total, sale) => total + Number(sale.amount || 0), 0);
+    const paidTotal = payouts
+      .filter((payout) => String(payout.status || "").toLowerCase() === "paid")
+      .reduce((total, payout) => total + Number(payout.amount || 0), 0);
+    const commissionDue = Math.max(0, Math.round(salesTotal * 0.3) - paidTotal);
+
+    if (statsTarget) {
+      renderMetricCards(statsTarget, [
+        ["Views", formatNumber(views.length)],
+        ["Clicks", formatNumber(clicks.length)],
+        ["Leads", formatNumber(leads.length)],
+        ["Sales", formatNumber(sales.length)],
+        ["Komisi Estimasi", formatCurrency(commissionDue)]
+      ]);
+    }
+    if (tableTarget) {
+      tableTarget.innerHTML = tableHtml(["Tanggal", "Order ID", "Nominal", "Status"], sales.map((sale) => [
+        formatDate(sale.createdAt),
+        escapeHtml(sale.orderId || "-"),
+        formatCurrency(sale.amount),
+        statusBadge(sale.status || "pending")
+      ]));
+    }
+  } catch (error) {
+    if (statsTarget) statsTarget.innerHTML = `<div class="notice error">Gagal membaca data affiliate: ${escapeHtml(error.message)}</div>`;
+  }
+  hydrateIcons();
+}
+
 function bindLinkGenerator() {
   const form = document.querySelector("[data-link-generator]");
   if (!form) return;
-  form.addEventListener("submit", (event) => {
+  let currentUser = null;
+  authApi.watch((user) => {
+    currentUser = user;
+    if (!user) return;
+    authApi.profile(user.uid).then((profile) => {
+      const codeInput = form.querySelector('[name="code"]');
+      if (codeInput && !codeInput.value) codeInput.value = affiliateCodeFromProfile(profile);
+      ["bankName", "bankAccountNumber", "bankAccountName"].forEach((field) => {
+        const input = form.querySelector(`[name="${field}"]`);
+        if (input && !input.value) input.value = profile?.[field] || "";
+      });
+    });
+  });
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = new FormData(form);
     const url = new URL(data.get("target") || `${location.origin}${base}salespage.html`, location.href);
     url.searchParams.set("ref", data.get("code"));
     if (data.get("campaign")) url.searchParams.set("campaign", data.get("campaign"));
     document.querySelector("[data-generated-link]").value = url.toString();
+    if (form.querySelector('[name="saveCode"]')?.checked && currentUser) {
+      await dataApi.update("members", currentUser.uid, {
+        affiliateCode: data.get("code"),
+        bankName: data.get("bankName") || "",
+        bankAccountNumber: data.get("bankAccountNumber") || "",
+        bankAccountName: data.get("bankAccountName") || "",
+        updatedAt: new Date().toISOString()
+      });
+    }
   });
 }
 
@@ -570,6 +676,9 @@ function bindAdminActions() {
           affiliateCode: payload.affiliateCode,
           email: payload.email,
           name: payload.name,
+          bankName: payload.bankName || "",
+          bankAccountNumber: payload.bankAccountNumber || "",
+          bankAccountName: payload.bankAccountName || "",
           amount,
           status: "pending"
         });
@@ -613,6 +722,24 @@ async function renderProductGallery() {
     hydrateIcons();
   } catch (error) {
     target.innerHTML = `<div class="notice error">Gagal memuat produk: ${escapeHtml(error.message)}</div>`;
+  }
+}
+
+async function renderAffiliatePayouts(profile) {
+  const target = document.querySelector("[data-affiliate-payouts]");
+  if (!target) return;
+  const affiliateCode = affiliateCodeFromProfile(profile);
+  target.innerHTML = `<div class="notice">Memuat payout...</div>`;
+  try {
+    const payouts = await dataApi.byField("payouts", "affiliateCode", affiliateCode, 50);
+    target.innerHTML = tableHtml(["Tanggal", "Rekening", "Nominal", "Status"], payouts.map((payout) => [
+      formatDate(payout.createdAt),
+      escapeHtml([payout.bankName, payout.bankAccountNumber, payout.bankAccountName].filter(Boolean).join(" - ") || "-"),
+      formatCurrency(payout.amount),
+      statusBadge(payout.status || "pending")
+    ]));
+  } catch (error) {
+    target.innerHTML = `<div class="notice error">Gagal memuat payout: ${escapeHtml(error.message)}</div>`;
   }
 }
 
