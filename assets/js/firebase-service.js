@@ -13,6 +13,7 @@ import {
   addDoc,
   collection,
   doc,
+  getCountFromServer,
   getDoc,
   getDocs,
   limit,
@@ -106,6 +107,10 @@ export const dataApi = {
     const q = query(collection(db, collectionName), orderBy("createdAt", "desc"), limit(size));
     const snap = await getDocs(q);
     return snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+  },
+  async count(collectionName) {
+    const snap = await getCountFromServer(collection(db, collectionName));
+    return snap.data().count;
   },
   async byField(collectionName, field, value, size = 20) {
     const q = query(collection(db, collectionName), where(field, "==", value), limit(size));
