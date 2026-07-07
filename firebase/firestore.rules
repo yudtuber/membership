@@ -41,6 +41,19 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /products/{id} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /payouts/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    match /supportReplies/{id} {
+      allow read, write: if isAdmin();
+    }
+
     match /views/{id} {
       allow create: if true;
       allow read, update, delete: if isAdmin();
