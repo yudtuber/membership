@@ -176,8 +176,9 @@ async function renderStats() {
 
   if (area === "admin") {
     try {
-      const [members, orders, leads, tickets, views, clicks, sales] = await Promise.all([
+      const [members, products, orders, leads, tickets, views, clicks, sales] = await Promise.all([
         dataApi.count("members"),
+        dataApi.count("products"),
         dataApi.count("orders"),
         dataApi.count("leads"),
         dataApi.count("supportTickets"),
@@ -188,6 +189,7 @@ async function renderStats() {
       const revenue = sales.reduce((total, sale) => total + Number(sale.amount || 0), 0);
       renderMetricCards(stats, [
         ["Members", formatNumber(members)],
+        ["Products", formatNumber(products)],
         ["Orders", formatNumber(orders)],
         ["Leads", formatNumber(leads)],
         ["Tickets", formatNumber(tickets)],
@@ -267,6 +269,19 @@ async function renderAdminTable(table, type) {
         formatCurrency(order.amount),
         escapeHtml(order.gateway || "manual"),
         statusBadge(order.status || "pending")
+      ]));
+      return;
+    }
+
+    if (tableType === "products") {
+      const products = await dataApi.latest("products", 50);
+      table.innerHTML = tableHtml(["Produk", "Plan", "Harga", "Akses", "Download", "Status"], products.map((product) => [
+        escapeHtml(product.name || "-"),
+        escapeHtml(product.plan || product.slug || "-"),
+        formatCurrency(product.price),
+        escapeHtml(product.accessLevel || "-"),
+        product.downloadUrl ? `<a href="${escapeHtml(product.downloadUrl)}" target="_blank" rel="noopener">Link</a>` : "-",
+        statusBadge(product.status || "active")
       ]));
       return;
     }
@@ -373,6 +388,31 @@ function bindNewsletterAdmin() {
   });
 }
 
+function bindProductAdmin() {
+  const form = document.querySelector("[data-admin-product-form]");
+  if (!form) return;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(form));
+    const status = form.querySelector("[data-form-status]");
+    try {
+      await dataApi.createProduct(data);
+      form.reset();
+      if (status) {
+        status.className = "notice success";
+        status.textContent = "Produk berhasil ditambahkan ke Firestore.";
+      }
+      await renderTable();
+      await renderStats();
+    } catch (error) {
+      if (status) {
+        status.className = "notice error";
+        status.textContent = error.message;
+      }
+    }
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   renderTopbar();
   renderFooter();
@@ -385,6 +425,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bindLogout();
   bindLinkGenerator();
   bindNewsletterAdmin();
+  bindProductAdmin();
   hydrateIcons();
   trackView();
 });
